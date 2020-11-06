@@ -23,6 +23,8 @@
 #define FALSE 0
 #define TRUE  1
 
+#define AI_PLAYER 0
+
 const char *row_names = "01234567";
 const char *col_names = "01234567";
 
@@ -247,6 +249,20 @@ void prompt_move( int *p_row, int *p_column )
     scanf( "%d %d", p_row, p_column );
 }
 
+void ai_move( int *p_row, int *p_column )
+{
+  for ( int i=0; i<8; ++i )
+    {
+        for ( int j=0; j<8; ++j )
+        {
+          if (board[i][j] == PLAYABLE) {
+            *p_row = i;
+            *p_column = j;
+          }
+        }
+    }
+}
+
 void capture_pieces( int i, int j )
 {
     int opposing_player = ( current_player + 1 ) % 2;
@@ -364,7 +380,11 @@ void capture_pieces( int i, int j )
 void make_next_move( )
 {
     int row, column;
-    prompt_move( &row, &column );
+    if (AI_PLAYER == current_player) {
+      ai_move( &row, &column );
+    } else {
+      prompt_move( &row, &column );
+    }
     if ( is_valid_position( row, column ) && board[row][column] == PLAYABLE )
     {
         board[row][column] = current_player;
