@@ -258,6 +258,7 @@ void ai_move( int *p_row, int *p_column )
           if (board[i][j] == PLAYABLE) {
             *p_row = i;
             *p_column = j;
+            return;
           }
         }
     }
@@ -380,11 +381,11 @@ void capture_pieces( int i, int j )
 void make_next_move( )
 {
     int row, column;
-    if (AI_PLAYER == current_player) {
+   // if (AI_PLAYER == current_player) {
       ai_move( &row, &column );
-    } else {
-      prompt_move( &row, &column );
-    }
+    // } else {
+    //   prompt_move( &row, &column );
+    // }
     if ( is_valid_position( row, column ) && board[row][column] == PLAYABLE )
     {
         board[row][column] = current_player;
