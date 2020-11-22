@@ -249,21 +249,6 @@ void prompt_move( int *p_row, int *p_column )
     scanf( "%d %d", p_row, p_column );
 }
 
-void ai_move( int *p_row, int *p_column )
-{
-  for ( int i=0; i<8; ++i )
-    {
-        for ( int j=0; j<8; ++j )
-        {
-          if (board[i][j] == PLAYABLE) {
-            *p_row = i;
-            *p_column = j;
-            return;
-          }
-        }
-    }
-}
-
 void capture_pieces( int i, int j )
 {
     int opposing_player = ( current_player + 1 ) % 2;
@@ -378,14 +363,179 @@ void capture_pieces( int i, int j )
     }
 }
 
+int capture_potential_pieces( int i, int j, char copy_board[8][8], int curr_potential_player, int copy_playable_direction[8][8][8])
+{
+    int opposing_player = ( curr_potential_player + 1 ) % 2;
+    int potential_score = 0;
+    int i_it, j_it;
+    
+    // Capture UL diagonal
+    if ( copy_playable_direction[i][j][0] )
+    {
+        i_it = i-1, j_it = j-1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            i_it -= 1;
+            j_it -= 1;
+        }
+    }
+
+    // Capture UP path
+    if ( copy_playable_direction[i][j][1] )
+    {
+        i_it = i-1, j_it = j;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = current_player;
+            potential_score++;
+            i_it -= 1;
+        }
+    }
+    
+    // Capture UR diagonal
+    if ( copy_playable_direction[i][j][2] )
+    {
+        i_it = i-1, j_it = j+1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            i_it -= 1;
+            j_it += 1;
+        }
+    }
+
+    // Capture LEFT path
+    if ( copy_playable_direction[i][j][3] )
+    {
+        i_it = i, j_it = j-1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            j_it -= 1;
+        }
+    }
+
+    // Capture RIGHT path
+    if ( copy_playable_direction[i][j][4] )
+    {
+        i_it = i, j_it = j+1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            j_it += 1;
+        }
+    }
+
+    // Capture DL diagonal
+    if ( copy_playable_direction[i][j][5] )
+    {
+        i_it = i+1, j_it = j-1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            i_it += 1;
+            j_it -= 1;
+        }
+    }
+
+    // Capture DOWN path
+    if ( copy_playable_direction[i][j][6] )
+    {
+        i_it = i+1, j_it = j;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            i_it += 1;
+        }
+    }
+
+    // Capture DR diagonal
+    if ( copy_playable_direction[i][j][7] )
+    {
+        i_it = i+1, j_it = j+1;
+        while ( copy_board[i_it][j_it] == opposing_player )
+        {
+            copy_board[i_it][j_it] = curr_potential_player;
+            potential_score++;
+            i_it += 1;
+            j_it += 1;
+        }
+    }
+    return potential_score;
+}
+
+// Play to the first playable tile
+void get_dummyAI_move( int *p_row, int *p_column )
+{
+  for ( int i=0; i<8; ++i )
+    {
+        for ( int j=0; j<8; ++j )
+        {
+          if (board[i][j] == PLAYABLE) {
+            *p_row = i;
+            *p_column = j;
+            return;
+          }
+        }
+    }
+}
+
+// Think ahead 1 step
+void get_easyAI_move( int *p_row, int *p_column )
+{
+  int maxScore = 0;
+  for ( int i=0; i<8; ++i )
+    {
+        for ( int j=0; j<8; ++j )
+        {
+          if (board[i][j] == PLAYABLE) {
+              char copy_board[8][8];
+              int copy_playable_direction[8][8][8];
+              memcpy(copy_board, board, sizeof (char) * 8 * 8);
+              memcpy(copy_playable_direction, playable_direction, sizeof (int) * 8 * 8 * 8);
+              int s = capture_potential_pieces(i, j, copy_board, current_player, copy_playable_direction);
+              if (s > maxScore) {
+                maxScore = s;
+                *p_row = i;
+                *p_column = j;
+              }
+          }
+        }
+    }
+}
+
+// Think ahead 3 steps
+void get_mediumAI_move( int *p_row, int *p_column )
+{
+  for ( int i=0; i<8; ++i )
+    {
+        for ( int j=0; j<8; ++j )
+        {
+          if (board[i][j] == PLAYABLE) {
+            *p_row = i;
+            *p_column = j;
+            return;
+          }
+        }
+    }
+}
+
 void make_next_move( )
 {
     int row, column;
-   // if (AI_PLAYER == current_player) {
-      ai_move( &row, &column );
-    // } else {
-    //   prompt_move( &row, &column );
-    // }
+    if (AI_PLAYER == current_player) {
+      get_easyAI_move( &row, &column );
+    } else {
+       //prompt_move( &row, &column );
+       get_dummyAI_move( &row, &column );
+    }
     if ( is_valid_position( row, column ) && board[row][column] == PLAYABLE )
     {
         board[row][column] = current_player;
