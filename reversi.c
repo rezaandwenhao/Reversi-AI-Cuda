@@ -33,13 +33,22 @@ int black_score = 2;
 
 void init_game( )
 {
-    memset( board, EMPTY, sizeof( board ) );
+    for(int i=0; i<8; i++){
+        for(int j=0; j<8; j++){
+            board[i][j] = EMPTY;
+        }
+    }
+ //   memset( board, EMPTY, sizeof( board ) );
     board[3][3] = BLACK;
     board[4][4] = BLACK;
     board[3][4] = WHITE;
     board[4][3] = WHITE;
     scores[WHITE] = 2;
     scores[BLACK] = 2;
+    game_ended = FALSE;
+    skipped_turn = FALSE;
+    wrong_move = FALSE;
+    has_valid_move = FALSE;
     current_player = BLACK;
 }
 
@@ -137,7 +146,7 @@ int is_playable( int i, int j )
     }
     if ( is_valid_position( i_it, j_it ) && distance( i, j, i_it, j_it ) > 1 && board[i_it][j_it] == current_player )
     {
-        printf("%d, %d, %d, %d\n", i, j, i_it, j_it);
+       // printf("%d, %d, %d, %d\n", i, j, i_it, j_it);
         playable_direction[i][j][5] = 1;
         playable = TRUE;
     }
@@ -609,7 +618,7 @@ int capture_potential_pieces( int i, int j, char copy_board[8][8], int curr_pote
 // Random player
 void get_random_move( int *p_row, int *p_column )
 {
-  srand(time(0));
+
   int count = 0;
   for ( int i=0; i<8; ++i )
   {
@@ -618,6 +627,7 @@ void get_random_move( int *p_row, int *p_column )
       if (board[i][j] == PLAYABLE) {
         count++;
         if (rand() % count == 0) {
+            printf("random: %d", rand());
           *p_row = i;
           *p_column = j;
         }        
@@ -674,6 +684,7 @@ int predict_next_move(char cboard[8][8], int cplayable_direction[8][8][8], int t
           }
         }
     }
+    if(maxScore == -100) maxScore = 0;
     return maxScore;
 }
 
@@ -695,7 +706,7 @@ void get_mediumAI_move( int *p_row, int *p_column )
               int res = predict_next_move(copy_board, copy_playable_direction, (current_player+1) % 2, 2);
 
               int diff = s - res;
-              printf("medium score: %d here, row: %d, column: %d\n", diff, i, j);
+             // printf("medium score: %d here, row: %d, column: %d\n", diff, i, j);
               if (diff >= maxScore) {
                 maxScore = s;
                 *p_row = i;
@@ -711,12 +722,12 @@ void make_next_move( )
 {
     int row, column;
     if (AI_PLAYER == current_player) {
-      get_mediumAI_move( &row, &column );
-      printf("medium: row: %d, column: %d\n", row, column);
+      get_random_move( &row, &column );
+      //printf("random: row: %d, column: %d\n", row, column);
     } else {
        //prompt_move( &row, &column );
-       get_random_move( &row, &column );
-       printf("random: row: %d, column: %d\n", row, column);
+       get_mediumAI_move( &row, &column );
+     //  printf("easy: row: %d, column: %d\n", row, column);
     }
     if ( is_valid_position( row, column ) && board[row][column] == PLAYABLE )
     {
@@ -747,31 +758,46 @@ void display_score( )
 
 int main( )
 {
-    init_game();
-    while ( !game_ended ){
-        if ( !wrong_move ) mark_playable_positions( );
-        if ( !has_valid_move )
-        {
-            if ( skipped_turn )
+    srand(time(NULL));
+    int countXWin = 0;
+    int draw = 0;
+    int count0Win = 0;
+    for(int i=0; i<100; i++){
+        init_game();
+        while ( !game_ended ){
+            if ( !wrong_move ) mark_playable_positions( );
+            if ( !has_valid_move )
             {
+                if ( skipped_turn )
+                {
 
-                game_ended = 1;
-                draw_board( );
+                    game_ended = 1;
+                    draw_board( );
+                    continue;
+                }
+                skipped_turn = 1;
+                change_current_player( );
                 continue;
             }
-            skipped_turn = 1;
-            change_current_player( );
-            continue;
+            skipped_turn = 0;
+            //draw_board( );
+            //display_score( );
+            //display_current_player( );
+            //display_wrong_move( );
+            if(wrong_move) exit(0);
+            make_next_move( );
         }
-        skipped_turn = 0;
-        draw_board( );
-        display_score( );
-        display_current_player( );
-        display_wrong_move( );
-        if(wrong_move) exit(0);
-        make_next_move( );
+        //mark_playable_positions();
+       // draw_board( );
+        display_winner( );
+        if(scores[WHITE] > scores[BLACK]){
+            countXWin++;
+        } else if(scores[WHITE] < scores[BLACK]){
+            count0Win++;
+        } else {
+            draw++;
+        }
     }
-    //mark_playable_positions();
-   // draw_board( );
-    display_winner( );
+
+    printf("x wins : %d, 0 wins : %d, draw : %d\n", countXWin, count0Win, draw);
 }
