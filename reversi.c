@@ -17,6 +17,8 @@
 #define TRUE  1
 
 #define AI_PLAYER 0
+#define STEPS_AHEAD 2
+#define REPEAT_GAME 100
 
 const char *row_names = "01234567";
 const char *col_names = "01234567";
@@ -33,12 +35,12 @@ int black_score = 2;
 
 void init_game( )
 {
-    for(int i=0; i<8; i++){
-        for(int j=0; j<8; j++){
-            board[i][j] = EMPTY;
-        }
-    }
- //   memset( board, EMPTY, sizeof( board ) );
+    // for(int i=0; i<8; i++){
+    //     for(int j=0; j<8; j++){
+    //         board[i][j] = EMPTY;
+    //     }
+    // }
+    memset( board, EMPTY, sizeof( board ) );
     board[3][3] = BLACK;
     board[4][4] = BLACK;
     board[3][4] = WHITE;
@@ -703,7 +705,7 @@ void get_mediumAI_move( int *p_row, int *p_column )
               memcpy(copy_playable_direction, playable_direction, sizeof (int) * 8 * 8 * 8);
               int s = capture_potential_pieces(i, j, copy_board, current_player, copy_playable_direction);
               mark_playable_positions_dummy(copy_board, copy_playable_direction, (current_player+1) % 2);
-              int res = predict_next_move(copy_board, copy_playable_direction, (current_player+1) % 2, 2);
+              int res = predict_next_move(copy_board, copy_playable_direction, (current_player+1) % 2, STEPS_AHEAD);
 
               int diff = s - res;
              // printf("medium score: %d here, row: %d, column: %d\n", diff, i, j);
@@ -762,7 +764,7 @@ int main( )
     int countXWin = 0;
     int draw = 0;
     int count0Win = 0;
-    for(int i=0; i<100; i++){
+    for(int i=0; i<REPEAT_GAME; i++){
         init_game();
         while ( !game_ended ){
             if ( !wrong_move ) mark_playable_positions( );
