@@ -16,7 +16,7 @@
 #define FALSE 0
 #define TRUE  1
 
-#define AI_PLAYER 0
+#define X_PLAYER 0
 #define STEPS_AHEAD 2
 #define REPEAT_GAME 100
 
@@ -723,7 +723,7 @@ void get_mediumAI_move( int *p_row, int *p_column )
 void make_next_move( )
 {
     int row, column;
-    if (AI_PLAYER == current_player) {
+    if (X_PLAYER == current_player) {
       get_random_move( &row, &column );
       //printf("random: row: %d, column: %d\n", row, column);
     } else {
