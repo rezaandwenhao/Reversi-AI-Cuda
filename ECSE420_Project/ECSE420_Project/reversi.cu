@@ -20,6 +20,8 @@
 #define TRUE  1
 
 #define AI_PLAYER 0
+enum AI_LEVEL {Easy, Medium, Easy_CUDA, Medium_CUDA};
+const int ai = Easy;
 
 const char* row_names = "01234567";
 const char* col_names = "01234567";
@@ -1106,7 +1108,7 @@ void get_random_move_cpu(int* p_row, int* p_column)
 }
 
 // Think ahead 1 step
-void get_easyAI_move_cpu(int* p_row, int* p_column)
+int get_easyAI_move_cpu(move* moves)
 {
 	int maxScore = 0;
 	for (int i = 0; i < 8; ++i)
@@ -1119,15 +1121,16 @@ void get_easyAI_move_cpu(int* p_row, int* p_column)
 				memcpy(copy_board, board, sizeof(char) * 8 * 8);
 				memcpy(copy_playable_direction, playable_direction, sizeof(int) * 8 * 8 * 8);
 				int s = capture_potential_pieces_cpu(i, j, copy_board, current_player, copy_playable_direction);
+				moves[i*8 + j].max = s;
+				moves[i*8 + j].i = i;
+				moves[i*8 + j].j = j;
 				if (s >= maxScore) {
 					maxScore = s;
-					*p_row = i;
-					*p_column = j;
-					//printf("current player: %d here\n", current_player);
 				}
 			}
 		}
 	}
+	return maxScore;
 }
 
 int predict_next_move_cpu(char cboard[8][8], int cplayable_direction[8][8][8], int tmp_current_player, int count) {
@@ -1147,6 +1150,37 @@ int predict_next_move_cpu(char cboard[8][8], int cplayable_direction[8][8][8], i
 				int res = predict_next_move_cpu(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2, count - 1);
 
 				s = s - res;
+				if (s >= maxScore) {
+					maxScore = s;
+				}
+			}
+		}
+	}
+	return maxScore;
+}
+
+// Think ahead 3 steps
+int get_mediumAI_move_cpu(move* moves)
+{
+	int maxScore = -1000;
+	for (int i = 0; i < 8; ++i)
+	{
+		for (int j = 0; j < 8; ++j)
+		{
+			if (board[i][j] == PLAYABLE) {
+				char copy_board[8][8];
+				int copy_playable_direction[8][8][8];
+				memcpy(copy_board, board, sizeof(char) * 8 * 8);
+				memcpy(copy_playable_direction, playable_direction, sizeof(int) * 8 * 8 * 8);
+				int s = capture_potential_pieces_cpu(i, j, copy_board, current_player, copy_playable_direction);
+				mark_playable_positions_cpu_dummy_cpu(copy_board, copy_playable_direction, (current_player + 1) % 2);
+				int res = predict_next_move_cpu(copy_board, copy_playable_direction, (current_player + 1) % 2, 2);
+
+				s = s - res;
+				// printf("medium score: %d here, row: %d, column: %d\n", diff, i, j);
+				moves[i * 8 + j].max = s;
+				moves[i * 8 + j].i = i;
+				moves[i * 8 + j].j = j;
 				if (s >= maxScore) {
 					maxScore = s;
 				}
@@ -1179,62 +1213,128 @@ void make_next_move()
 	int row = 0;
 	int column = 0;
 	if (AI_PLAYER == current_player) {
-		move* moves;
-		move* movesCpu;
-		char* devBoard;
-		int* devplayDir;
-		int m = 0;
-		int n = 0;
-		int max = -100;
-		devBoard = (char*)malloc(64 * sizeof(char));
-		devplayDir = (int*)malloc(512 * sizeof(int));
-		for (int i = 0; i < 8; i++)
-		{
-			for (int j = 0; j < 8; j++)
+		if (ai == Easy_CUDA) {
+			move* moves;
+			char* devBoard;
+			int* devplayDir;
+			int m = 0;
+			int n = 0;
+			int max = -100;
+			devBoard = (char*)malloc(64 * sizeof(char));
+			devplayDir = (int*)malloc(512 * sizeof(int));
+			for (int i = 0; i < 8; i++)
 			{
-				for (int k = 0; k < 8; k++)
+				for (int j = 0; j < 8; j++)
 				{
-					devplayDir[n] = playable_direction[i][j][k];
-					n++;
+					for (int k = 0; k < 8; k++)
+					{
+						devplayDir[n] = playable_direction[i][j][k];
+						n++;
+					}
+					devBoard[m] = board[i][j];
+					m++;
 				}
-				devBoard[m] = board[i][j];
-				m++;
 			}
-		}
-		char* devBoard2;
-		int* devplayDir2;
-		cudaMalloc(&devBoard2, 8 * 8 * sizeof(char));
-		cudaMemcpy(devBoard2, devBoard, 8 * 8 * sizeof(char), cudaMemcpyHostToDevice);
-		cudaMalloc(&devplayDir2, 8 * 8 * 8 * sizeof(int));
-		cudaMemcpy(devplayDir2, devplayDir, 512 * sizeof(int), cudaMemcpyHostToDevice);
-		movesCpu = (move*)malloc(64 * sizeof(move));
-		cudaMallocManaged((void**)&moves, 64 * sizeof(move));
-		get_easyAI_move << <1, 64 >> > (devBoard2, devplayDir2, &row, &column, current_player, moves);
-		cudaDeviceSynchronize();
-		cudaMemcpy(movesCpu, moves, 64 * sizeof(move), cudaMemcpyDeviceToHost);
-		max = moves[0].max;
-		for (int i = 0; i < 64; i++)
-		{
-			if (moves[i].max > max)
+			char* devBoard2;
+			int* devplayDir2;
+			cudaMalloc(&devBoard2, 8 * 8 * sizeof(char));
+			cudaMemcpy(devBoard2, devBoard, 8 * 8 * sizeof(char), cudaMemcpyHostToDevice);
+			cudaMalloc(&devplayDir2, 8 * 8 * 8 * sizeof(int));
+			cudaMemcpy(devplayDir2, devplayDir, 512 * sizeof(int), cudaMemcpyHostToDevice);
+			cudaMallocManaged((void**)&moves, 64 * sizeof(move));
+			get_easyAI_move << < 1, 64 >> > (devBoard2, devplayDir2, &row, &column, current_player, moves);
+			cudaDeviceSynchronize();
+
+			for (int i = 0; i < 64; i++)
 			{
-				max = moves[i].max;
-				row = moves[i].i;
-				column = moves[i].j;
+				if (moves[i].max > max)
+				{
+					max = moves[i].max;
+				}
 			}
+
+			int sampling_count = 0;
+			for (int i = 0; i < 64; i++)
+			{
+				if (moves[i].max == max)
+				{
+					sampling_count++;
+					if (rand() % sampling_count == 0) {
+						row = moves[i].i;
+						column = moves[i].j;
+					}
+				}
+			}
+			//printf("max: %d", max);
+			//printf("medium: row: %d, column: %d\n", row, column);
+			cudaFree(devBoard2);
+			cudaFree(devplayDir2);
+			cudaFree(moves);
+			free(devBoard);
+			free(devplayDir);
 		}
-		//printf("max: %d", max);
-		//printf("medium: row: %d, column: %d\n", row, column);
-		cudaFree(devBoard2);
-		cudaFree(devplayDir2);
-		cudaFree(moves);
-		free(devBoard);
-		free(devplayDir);
+		else if (ai == Easy) {
+			move* moves;
+			moves = (move*)malloc(64 * sizeof(move));
+			int max = get_easyAI_move_cpu(moves);
+			int sampling_count = 0;
+			for (int i = 0; i < 64; i++)
+			{
+				if (moves[i].max == max)
+				{
+					sampling_count++;
+					if (rand() % sampling_count == 0) {
+						row = moves[i].i;
+						column = moves[i].j;
+					}
+				}
+			}
+			free(moves);
+		}
+		else if (ai == Medium) {
+			move* moves;
+			moves = (move*)malloc(64 * sizeof(move));
+			int max = get_mediumAI_move_cpu(moves);
+			int sampling_count = 0;
+			for (int i = 0; i < 64; i++)
+			{
+				if (moves[i].max == max)
+				{
+					sampling_count++;
+					if (rand() % sampling_count == 0) {
+						row = moves[i].i;
+						column = moves[i].j;
+					}
+				}
+			}
+			free(moves);
+		}
 
 	}
 	else {
 		//prompt_move_cpu( &row, &column );
 		get_random_move_cpu(&row, &column);
 		//printf("random: row: %d, column: %d\n", row, column);
+
+		// Uncomment to have easy plays against the other ai
+		/*
+		move* moves;
+		moves = (move*)malloc(64 * sizeof(move));
+		int max = get_easyAI_move_cpu(moves);
+		int sampling_count = 0;
+		for (int i = 0; i < 64; i++)
+		{
+			if (moves[i].max == max)
+			{
+				sampling_count++;
+				if (rand() % sampling_count == 0) {
+					row = moves[i].i;
+					column = moves[i].j;
+				}
+			}
+		}
+		free(moves);
+		*/
 	}
 	if (is_valid_position_cpu(row, column) && board[row][column] == PLAYABLE)
 	{
@@ -1276,12 +1376,12 @@ int main()
 			//display_score( );
 			//display_current_player( );
 			//display_wrong_move( );
-			if (wrong_move) exit(0);
+			//if (wrong_move) exit(0);
 			make_next_move();
 		}
 		//mark_playable_positions();
 	   // draw_board( );
-		//display_winner_cpu();
+		display_winner_cpu();
 		if (scores[WHITE] > scores[BLACK]) {
 			countXWin++;
 		}
