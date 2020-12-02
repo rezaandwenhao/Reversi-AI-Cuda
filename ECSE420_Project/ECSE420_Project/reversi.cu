@@ -1,8 +1,9 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
+#include <sys/time.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
@@ -35,6 +36,7 @@ int skipped_turn = FALSE;
 int wrong_move = FALSE;
 int has_valid_move = FALSE;
 int scores[2];
+double total_move_time = 0.0;
 
 __device__ int is_valid_position(int i, int j)
 {
@@ -327,7 +329,6 @@ __global__ void predict_next_move(char* cboard, int* cplayable_direction, int cu
       cudaFree(copy_board2);
       cudaFree(copy_playable_direction2);
       cudaFree(res2);
-      //free(res);
 		}
 	}
 }
@@ -384,11 +385,9 @@ __global__ void get_mediumAI_move(char* cboard, int* cplayable_direction, int cu
       cudaFree(copy_board2);
       cudaFree(copy_playable_direction2);
       cudaFree(res2);
-      //free(res);
 		}
 	}
 }
-
 
 __global__ void get_easyAI_move(char* board, int* playable_direction, int current_player, move* moves)
 {
@@ -1132,6 +1131,7 @@ void make_next_move()
 {
 	int row = 0;
 	int column = 0;
+  struct timeval t1, t2;
 	if (AI_PLAYER == current_player) {
 		if (ai == Easy_CUDA || ai == Medium_CUDA) {
 			move* moves;
@@ -1171,12 +1171,15 @@ void make_next_move()
           moves[i*8 + j].j = j;
  				}
 			}
+      gettimeofday(&t1, NULL);
       if (ai == Easy_CUDA) {
         get_easyAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
       } else {
         get_mediumAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
       }
 			cudaDeviceSynchronize();
+      gettimeofday(&t2, NULL);
+      total_move_time += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 
 			for (int i = 0; i < 64; i++)
 			{
@@ -1219,11 +1222,14 @@ void make_next_move()
  				}
 			}
       int max = -200;
+      gettimeofday(&t1, NULL);
       if (ai == Easy) {
         max = get_easyAI_move_cpu(moves);
       } else {
         max = get_mediumAI_move_cpu(moves);
       }
+      gettimeofday(&t2, NULL);
+      total_move_time += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
 			int sampling_count = 0;
 			for (int i = 0; i < 64; i++)
 			{
@@ -1284,7 +1290,7 @@ int main()
 	int countXWin = 0;
 	int draw = 0;
 	int count0Win = 0;
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 10; i++) {
 		init_game();
 		while (!game_ended) {
 			if (!wrong_move) mark_playable_positions_cpu();
@@ -1323,6 +1329,6 @@ int main()
 			draw++;
 		}
 	}
-
 	printf("x wins : %d, 0 wins : %d, draw : %d\n", countXWin, count0Win, draw);
+  printf("Total time that the AI spent to calculate moves: (%f ms)\n", total_move_time);
 }
