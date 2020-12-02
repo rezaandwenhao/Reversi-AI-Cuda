@@ -20,8 +20,9 @@
 #define TRUE  1
 
 #define AI_PLAYER 0
+#define STEPS_THINK_AHEAD 3  // There are some bugs that the AI does not work when think more than 3 steps ahead
 enum AI_LEVEL {Easy, Medium, Easy_CUDA, Medium_CUDA};
-const int ai = Easy;
+const int ai = Easy_CUDA;
 
 const char* row_names = "01234567";
 const char* col_names = "01234567";
@@ -34,23 +35,6 @@ int skipped_turn = FALSE;
 int wrong_move = FALSE;
 int has_valid_move = FALSE;
 int scores[2];
-
-
-template<typename T>
-struct array2D
-{
-	T* p;
-	int lda;
-
-	__device__ __host__
-		array2D(T* _p, int cols) : p(_p), lda(cols) {}
-
-	__device__ __host__
-		T& operator()(int i, int j) { return p[i * lda + j]; }
-
-	__device__ __host__
-		T& operator()(int i, int j) const { return p[i * lda + j]; }
-};
 
 __device__ int is_valid_position(int i, int j)
 {
@@ -65,118 +49,7 @@ __device__ int distance(int i1, int j1, int i2, int j2)
 	return dj;
 }
 
-__device__ int is_playable(int i, int j, char* board, int* playable_direction, int current_player)
-{
-	// memset( playable_direction[i][j], 0, 8 );
-	for (int m = 0; m < 8; ++m)
-	{
-		playable_direction[i * 64 + j * 8 + m] = 0;
-	}
-	if (!is_valid_position(i, j)) return FALSE;
-	if (board[i * 8 + j] != EMPTY) return FALSE;
-	int playable = FALSE;
-
-	int opposing_player = (current_player + 1) % 2;
-
-	// Test UL diagonal
-	int i_it = i - 1, j_it = j - 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-	{
-		i_it -= 1;
-		j_it -= 1;
-	}
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 0] = 1;
-		playable = TRUE;
-	}
-
-	// Test UP path
-	i_it = i - 1, j_it = j;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-		i_it -= 1;
-
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 1] = 1;
-		playable = TRUE;
-	}
-
-	// Test UR diagonal
-	i_it = i - 1, j_it = j + 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-	{
-		i_it -= 1;
-		j_it += 1;
-	}
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 2] = 1;
-		playable = TRUE;
-	}
-
-	// Test LEFT path
-	i_it = i, j_it = j - 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-		j_it -= 1;
-
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 3] = 1;
-		playable = TRUE;
-	}
-
-	// Test RIGHT path
-	i_it = i, j_it = j + 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-		j_it += 1;
-
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 4] = 1;
-		playable = TRUE;
-	}
-
-	// Test DL diagonal
-	i_it = i + 1, j_it = j - 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-	{
-		i_it += 1;
-		j_it -= 1;
-	}
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		//printf("%d, %d, %d, %d\n", i, j, i_it, j_it);
-		playable_direction[i * 64 + j * 8 + 5] = 1;
-		playable = TRUE;
-	}
-
-	// Test DOWN path
-	i_it = i + 1, j_it = j;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-		i_it += 1;
-
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 6] = 1;
-		playable = TRUE;
-	}
-
-	// Test DR diagonal
-	i_it = i + 1, j_it = j + 1;
-	while (is_valid_position(i_it, j_it) && board[i_it * 8 + j_it] == opposing_player)
-	{
-		i_it += 1;
-		j_it += 1;
-	}
-	if (is_valid_position(i_it, j_it) && distance(i, j, i_it, j_it) > 1 && board[i_it * 8 + j_it] == current_player)
-	{
-		playable_direction[i * 64 + j * 8 + 7] = 1;
-		playable = TRUE;
-	}
-	return playable;
-}
-
+// Update the copied board for copy_playable_direction
 __device__ int is_playable_dummy(int i, int j, char* copy_board, int* copy_playable_direction, int tmp_current_player)
 {
 	// memset( copy_playable_direction[i][j], 0, 8 );
@@ -288,42 +161,6 @@ __device__ int is_playable_dummy(int i, int j, char* copy_board, int* copy_playa
 	return playable;
 }
 
-//__device__ void mark_playable_positions(char* board, int* playable_direction, int current_player)
-//{
-//    has_valid_move = FALSE;
-//    for ( int i=0; i<8; ++i )
-//    {
-//        for ( int j=0; j<8; ++j )
-//        {
-//            if ( board[i*8 + j] == PLAYABLE )
-//                board[i*8 + j] = EMPTY;
-//            if ( is_playable( i, j, board, playable_direction, current_player) )
-//            {
-//                board[i*8 + j] = PLAYABLE;
-//                has_valid_move = TRUE;
-//            }
-//        }
-//    }
-//}
-
-__device__ void mark_playable_positions_dummy(char* copy_board, int* copy_playable_direction, int tmp_current_player)
-{
-	int has_valid_move = FALSE;
-	for (int i = 0; i < 8; ++i)
-	{
-		for (int j = 0; j < 8; ++j)
-		{
-			if (copy_board[i * 8 + j] == PLAYABLE)
-				copy_board[i * 8 + j] = EMPTY;
-			if (is_playable_dummy(i, j, copy_board, copy_playable_direction, tmp_current_player))
-			{
-				copy_board[i * 8 + j] = PLAYABLE;
-				has_valid_move = TRUE;
-			}
-		}
-	}
-}
-
 __device__ int capture_potential_pieces(int i, int j, char* copy_board, int curr_potential_player, int* copy_playable_direction)
 {
 	int opposing_player = (curr_potential_player + 1) % 2;
@@ -432,30 +269,75 @@ __device__ int capture_potential_pieces(int i, int j, char* copy_board, int curr
 	return potential_score;
 }
 
-
-
-__device__ int predict_next_move(char* cboard, int* cplayable_direction, int tmp_current_player, int count) {
-	if (count == 0) return 0;
-	int maxScore = -100;
-	for (int i = 0; i < 8; ++i) {
-		for (int j = 0; j < 8; ++j) {
-			if (cboard[i * 8 + j] == PLAYABLE) {
-				char* copy_board;
-				int* copy_playable_direction;
-				memcpy(copy_board, cboard, sizeof(char) * 8 * 8);
-				memcpy(copy_playable_direction, cplayable_direction, sizeof(int) * 8 * 8 * 8);
-				int s = capture_potential_pieces(i, j, copy_board, tmp_current_player, copy_playable_direction);
-				mark_playable_positions_dummy(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2);
-				int res = predict_next_move(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2, count - 1);
-
-				s = s - res;
-				if (s >= maxScore) {
-					maxScore = s;
-				}
+// Mark playable positions for the simulated copied board.
+__device__ void mark_playable_positions_dummy(char* copy_board, int* copy_playable_direction, int tmp_current_player)
+{
+	for (int i = 0; i < 8; ++i)
+	{
+		for (int j = 0; j < 8; ++j)
+		{
+      int idx = i * 8 + j;
+			if (copy_board[idx] == PLAYABLE)
+				copy_board[idx] = EMPTY;
+			if (is_playable_dummy(i, j, copy_board, copy_playable_direction, tmp_current_player))
+			{
+				copy_board[idx] = PLAYABLE;
 			}
 		}
 	}
-	return maxScore;
+}
+
+__global__ void predict_next_move(char* cboard, int* cplayable_direction, int current_player, int count, int* maxScore) {
+  if (count == 0) {
+      return;
+  }
+  int idx = threadIdx.x;
+	if (idx < 64)
+	{
+		int i = idx / 8;
+		int j = idx % 8;
+		//printf("board, %d\n", board[i*8 + j]);
+		if (cboard[i * 8 + j] == 3) {
+			char copy_board[64];
+      char* copy_board2;
+			int copy_playable_direction[512];
+      int* copy_playable_direction2;
+			memcpy(copy_board, cboard, sizeof(char) * 8 * 8);
+			memcpy(copy_playable_direction, cplayable_direction, sizeof(int) * 8 * 8 * 8);
+      copy_board[i * 8 + j] = current_player;
+			int s = capture_potential_pieces(i, j, copy_board, current_player, copy_playable_direction);
+      mark_playable_positions_dummy(copy_board, copy_playable_direction, (current_player + 1) % 2);
+      int* res;
+      int* res2;
+      res = (int*)malloc(64*sizeof(int));
+      for (int k = 0; k < 64; k++) {
+        res[k] = -100;
+      }
+      cudaMalloc((char**)&copy_board2, 64 * sizeof(char));
+      cudaMalloc((int**)&copy_playable_direction2, 512 * sizeof(int));
+      cudaMalloc((int**)&res2, 64*sizeof(int));
+      memcpy(copy_board2, copy_board, sizeof(char) * 8 * 8);
+			memcpy(copy_playable_direction2, copy_playable_direction, sizeof(int) * 8 * 8 * 8);
+      memcpy(res2, res, 64 * sizeof(int));
+      predict_next_move<<<1, 64>>>(copy_board2, copy_playable_direction2, (current_player + 1) % 2, count-1, res2);
+      cudaDeviceSynchronize();
+      //if (count == 1) printf("\n here: %d", s);
+
+      int max = -100;
+      for (int k = 0; k < 64; k++) {
+        if (res2[k] >= max) {
+          max = res2[k];
+        }   
+      }
+      if (max == -100) max = 0;
+      maxScore[idx] = s - max;
+      
+      cudaFree(copy_board2);
+      cudaFree(copy_playable_direction2);
+      cudaFree(res2);
+      free(res);
+		}
+	}
 }
 
 
@@ -463,37 +345,85 @@ typedef struct
 {
 	int i = 0;
 	int j = 0;
-	int max = 0;
+	int max = -200;
 } move;
 
 // Think ahead 3 steps
-__global__ void get_easyAI_move(char* board, int* playable_direction, int* p_row, int* p_column, int current_player, move* moves)
+__global__ void get_mediumAI_move(char* cboard, int* cplayable_direction, int current_player, move* moves)
 {
-	// Calculate the row index of the P element and M
 	int idx = threadIdx.x;
-	// Calculate the column index of P and N
-	//int j = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx < 64)
 	{
+		int i = idx / 8;
+		int j = idx % 8;
+		//printf("board, %d\n", board[i*8 + j]);
+		if (cboard[i * 8 + j] == 3) {
+			char copy_board[64];
+      char* copy_board2;
+			int copy_playable_direction[512];
+      int* copy_playable_direction2;
+			memcpy(copy_board, cboard, sizeof(char) * 8 * 8);
+			memcpy(copy_playable_direction, cplayable_direction, sizeof(int) * 8 * 8 * 8);
+      copy_board[i * 8 + j] = current_player;
+			int s = capture_potential_pieces(i, j, copy_board, current_player, copy_playable_direction);
+      mark_playable_positions_dummy(copy_board, copy_playable_direction, (current_player + 1) % 2);
+      int* res;
+      int* res2;
+      res = (int*)malloc(64*sizeof(int));
+      for (int k = 0; k < 64; k++) {
+        res[k] = -100;
+      }
+      cudaMalloc((char**)&copy_board2, 64 * sizeof(char));
+      cudaMalloc((int**)&copy_playable_direction2, 512 * sizeof(int));
+      cudaMalloc((int**)&res2, 64*sizeof(int));
+      memcpy(copy_board2, copy_board, sizeof(char) * 8 * 8);
+			memcpy(copy_playable_direction2, copy_playable_direction, sizeof(int) * 8 * 8 * 8);
+      memcpy(res2, res, 64 * sizeof(int));
+      predict_next_move<<<1, 64>>>(copy_board2, copy_playable_direction2, (current_player + 1) % 2, STEPS_THINK_AHEAD-1, res2);
+      cudaDeviceSynchronize();
 
+      int max = -100;
+      for (int k = 0; k < 64; k++) {
+        if (res2[k] >= max) {
+          max = res2[k];
+        }   
+      }
+      if (max == -100) max = 0;
+			moves[idx].max = s - max;
+      //printf("res2: %d\n", s-max);
+			moves[idx].i = i;
+      //printf("i: %d\n", i);
+			moves[idx].j = j;
+      //printf("j: %d\n", j);
+
+      cudaFree(copy_board2);
+      cudaFree(copy_playable_direction2);
+      cudaFree(res2);
+      free(res);
+		}
+	}
+}
+
+
+__global__ void get_easyAI_move(char* board, int* playable_direction, int current_player, move* moves)
+{
+	int idx = threadIdx.x;
+	if (idx < 64)
+	{
 		int i = idx / 8;
 		int j = idx % 8;
 		//printf("board, %d\n", board[i*8 + j]);
 		if (board[i * 8 + j] == 3) {
 			char copy_board[64];
 			int copy_playable_direction[512];
-			//copy_board = (char*)malloc(64 * sizeof(char));
-			//copy_playable_direction = (int*)malloc(512 * sizeof(int));
 			memcpy(copy_board, board, sizeof(char) * 8 * 8);
 			memcpy(copy_playable_direction, playable_direction, sizeof(int) * 8 * 8 * 8);
 			int s = capture_potential_pieces(i, j, copy_board, current_player, copy_playable_direction);
 
 			//printf("easy score: %d here, row: %d, column: %d\n", s, i, j);
-			//if (s >= maxScore) {
 			moves[idx].max = s;
 			moves[idx].i = i;
 			moves[idx].j = j;
-			//}
 		}
 	}
 }
@@ -503,11 +433,6 @@ __global__ void get_easyAI_move(char* board, int* playable_direction, int* p_row
 
 void init_game()
 {
-	// for(int i=0; i<8; i++){
-	//     for(int j=0; j<8; j++){
-	//         board[i][j] = EMPTY;
-	//     }
-	// }
 	memset(board, EMPTY, sizeof(board));
 	board[3][3] = BLACK;
 	board[4][4] = BLACK;
@@ -862,7 +787,6 @@ void capture_pieces_cpu(int i, int j)
 {
 	int opposing_player = (current_player + 1) % 2;
 	int i_it, j_it;
-	//printf("capture_pieces_cpu: row: %d, column: %d\n", i, j);
 	// Capture UL diagonal
 	if (playable_direction[i][j][0])
 	{
@@ -1213,7 +1137,7 @@ void make_next_move()
 	int row = 0;
 	int column = 0;
 	if (AI_PLAYER == current_player) {
-		if (ai == Easy_CUDA) {
+		if (ai == Easy_CUDA || ai == Medium_CUDA) {
 			move* moves;
 			char* devBoard;
 			int* devplayDir;
@@ -1242,7 +1166,20 @@ void make_next_move()
 			cudaMalloc(&devplayDir2, 8 * 8 * 8 * sizeof(int));
 			cudaMemcpy(devplayDir2, devplayDir, 512 * sizeof(int), cudaMemcpyHostToDevice);
 			cudaMallocManaged((void**)&moves, 64 * sizeof(move));
-			get_easyAI_move << < 1, 64 >> > (devBoard2, devplayDir2, &row, &column, current_player, moves);
+			for (int i = 0; i < 8; i++)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					moves[i*8 + j].max = -200;
+          moves[i*8 + j].i = i;
+          moves[i*8 + j].j = j;
+ 				}
+			}
+      if (ai == Easy_CUDA) {
+        get_easyAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
+      } else {
+        get_mediumAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
+      }
 			cudaDeviceSynchronize();
 
 			for (int i = 0; i < 64; i++)
@@ -1265,7 +1202,7 @@ void make_next_move()
 					}
 				}
 			}
-			//printf("max: %d", max);
+      //printf("max: %d\n", max);
 			//printf("medium: row: %d, column: %d\n", row, column);
 			cudaFree(devBoard2);
 			cudaFree(devplayDir2);
@@ -1273,10 +1210,15 @@ void make_next_move()
 			free(devBoard);
 			free(devplayDir);
 		}
-		else if (ai == Easy) {
+		else {
 			move* moves;
 			moves = (move*)malloc(64 * sizeof(move));
-			int max = get_easyAI_move_cpu(moves);
+      int max;
+      if (ai == Easy) {
+        max = get_easyAI_move_cpu(moves);
+      } else {
+        max = get_mediumAI_move_cpu(moves);
+      }
 			int sampling_count = 0;
 			for (int i = 0; i < 64; i++)
 			{
@@ -1291,29 +1233,12 @@ void make_next_move()
 			}
 			free(moves);
 		}
-		else if (ai == Medium) {
-			move* moves;
-			moves = (move*)malloc(64 * sizeof(move));
-			int max = get_mediumAI_move_cpu(moves);
-			int sampling_count = 0;
-			for (int i = 0; i < 64; i++)
-			{
-				if (moves[i].max == max)
-				{
-					sampling_count++;
-					if (rand() % sampling_count == 0) {
-						row = moves[i].i;
-						column = moves[i].j;
-					}
-				}
-			}
-			free(moves);
-		}
-
 	}
 	else {
+    // Uncomment to have prompt to play against AI
 		//prompt_move_cpu( &row, &column );
-		get_random_move_cpu(&row, &column);
+		
+    get_random_move_cpu(&row, &column);
 		//printf("random: row: %d, column: %d\n", row, column);
 
 		// Uncomment to have easy plays against the other ai
@@ -1354,7 +1279,7 @@ int main()
 	int countXWin = 0;
 	int draw = 0;
 	int count0Win = 0;
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 10; i++) {
 		init_game();
 		while (!game_ended) {
 			if (!wrong_move) mark_playable_positions_cpu();
@@ -1362,7 +1287,6 @@ int main()
 			{
 				if (skipped_turn)
 				{
-
 					game_ended = 1;
 					//draw_board_cpu();
 					continue;
@@ -1372,15 +1296,17 @@ int main()
 				continue;
 			}
 			skipped_turn = 0;
-			//draw_board( );
+			//draw_board_cpu( );
 			//display_score( );
 			//display_current_player( );
-			//display_wrong_move( );
-			//if (wrong_move) exit(0);
+			
+      if (wrong_move) {
+          display_wrong_move_cpu( );
+      }
 			make_next_move();
 		}
 		//mark_playable_positions();
-	   // draw_board( );
+	  //draw_board_cpu( );
 		display_winner_cpu();
 		if (scores[WHITE] > scores[BLACK]) {
 			countXWin++;
