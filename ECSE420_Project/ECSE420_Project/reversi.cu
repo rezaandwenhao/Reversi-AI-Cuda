@@ -52,7 +52,7 @@ __device__ int distance(int i1, int j1, int i2, int j2)
 }
 
 // Update the copied board for copy_playable_direction
-__device__ int is_playable_dummy(int i, int j, char* copy_board, int* copy_playable_direction, int tmp_current_player)
+__device__ int is_playable_cuda(int i, int j, char* copy_board, int* copy_playable_direction, int tmp_current_player)
 {
 	// memset( copy_playable_direction[i][j], 0, 8 );
 	for (int m = 0; m < 8; ++m)
@@ -272,7 +272,7 @@ __device__ int capture_potential_pieces(int i, int j, char* copy_board, int curr
 }
 
 // Mark playable positions for the simulated copied board.
-__device__ void mark_playable_positions_dummy(char* copy_board, int* copy_playable_direction, int tmp_current_player)
+__device__ void mark_playable_positions_cuda(char* copy_board, int* copy_playable_direction, int tmp_current_player)
 {
 	for (int i = 0; i < 8; ++i)
 	{
@@ -281,7 +281,7 @@ __device__ void mark_playable_positions_dummy(char* copy_board, int* copy_playab
       int idx = i * 8 + j;
 			if (copy_board[idx] == PLAYABLE)
 				copy_board[idx] = EMPTY;
-			if (is_playable_dummy(i, j, copy_board, copy_playable_direction, tmp_current_player))
+			if (is_playable_cuda(i, j, copy_board, copy_playable_direction, tmp_current_player))
 			{
 				copy_board[idx] = PLAYABLE;
 			}
@@ -308,7 +308,7 @@ __global__ void predict_next_move(char* cboard, int* cplayable_direction, int cu
 			memcpy(copy_playable_direction2, cplayable_direction, sizeof(int) * 8 * 8 * 8);
       copy_board2[i * 8 + j] = current_player;
 			int s = capture_potential_pieces(i, j, copy_board2, current_player, copy_playable_direction2);
-      mark_playable_positions_dummy(copy_board2, copy_playable_direction2, (current_player + 1) % 2);
+      mark_playable_positions_cuda(copy_board2, copy_playable_direction2, (current_player + 1) % 2);
       int* res2;
       cudaMalloc((int**)&res2, 64*sizeof(int));
       for (int k = 0; k < 64; k++) {
@@ -359,7 +359,7 @@ __global__ void get_mediumAI_move(char* cboard, int* cplayable_direction, int cu
 			memcpy(copy_playable_direction2, cplayable_direction, sizeof(int) * 8 * 8 * 8);
       copy_board2[i * 8 + j] = current_player;
 			int s = capture_potential_pieces(i, j, copy_board2, current_player, copy_playable_direction2);
-      mark_playable_positions_dummy(copy_board2, copy_playable_direction2, (current_player + 1) % 2);
+      mark_playable_positions_cuda(copy_board2, copy_playable_direction2, (current_player + 1) % 2);
       int* res2;
       cudaMalloc((int**)&res2, 64*sizeof(int));
       for (int k = 0; k < 64; k++) {
@@ -556,7 +556,7 @@ int is_playable_cpu(int i, int j)
 	return playable;
 }
 
-int is_playable_cpu_dummy_cpu(int i, int j, char copy_board[8][8], int copy_playable_direction[8][8][8], int tmp_current_player)
+int is_playable_cpu_ai(int i, int j, char copy_board[8][8], int copy_playable_direction[8][8][8], int tmp_current_player)
 {
 	// memset( copy_playable_direction[i][j], 0, 8 );
 	for (int m = 0; m < 8; ++m)
@@ -685,7 +685,7 @@ void mark_playable_positions_cpu()
 	}
 }
 
-void mark_playable_positions_cpu_dummy_cpu(char copy_board[8][8], int copy_playable_direction[8][8][8], int tmp_current_player)
+void mark_playable_positions_cpu_ai(char copy_board[8][8], int copy_playable_direction[8][8][8], int tmp_current_player)
 {
 	has_valid_move = FALSE;
 	for (int i = 0; i < 8; ++i)
@@ -694,7 +694,7 @@ void mark_playable_positions_cpu_dummy_cpu(char copy_board[8][8], int copy_playa
 		{
 			if (copy_board[i][j] == PLAYABLE)
 				copy_board[i][j] = EMPTY;
-			if (is_playable_cpu_dummy_cpu(i, j, copy_board, copy_playable_direction, tmp_current_player))
+			if (is_playable_cpu_ai(i, j, copy_board, copy_playable_direction, tmp_current_player))
 			{
 				copy_board[i][j] = PLAYABLE;
 				has_valid_move = TRUE;
@@ -1065,7 +1065,7 @@ int predict_next_move_cpu(char cboard[8][8], int cplayable_direction[8][8][8], i
         copy_board_mem_arr(copy_board, copy_playable_direction, cboard, cplayable_direction);
         copy_board[i][j] = tmp_current_player;
 				int s = capture_potential_pieces_cpu(i, j, copy_board, tmp_current_player, copy_playable_direction);
-				mark_playable_positions_cpu_dummy_cpu(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2);
+				mark_playable_positions_cpu_ai(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2);
 				int res = predict_next_move_cpu(copy_board, copy_playable_direction, (tmp_current_player + 1) % 2, count - 1);
 
 				s = s - res;
@@ -1089,10 +1089,10 @@ int get_mediumAI_move_cpu(move* moves)
 			if (board[i][j] == PLAYABLE) {
 				char copy_board[8][8];
 				int copy_playable_direction[8][8][8];
-        copy_board_mem_arr(copy_board, copy_playable_direction, board, playable_direction);
-        copy_board[i][j] = current_player;
+        		copy_board_mem_arr(copy_board, copy_playable_direction, board, playable_direction);
+        		copy_board[i][j] = current_player;
 				int s = capture_potential_pieces_cpu(i, j, copy_board, current_player, copy_playable_direction);
-				mark_playable_positions_cpu_dummy_cpu(copy_board, copy_playable_direction, (current_player + 1) % 2);
+				mark_playable_positions_cpu_ai(copy_board, copy_playable_direction, (current_player + 1) % 2);
 				int res = predict_next_move_cpu(copy_board, copy_playable_direction, (current_player + 1) % 2, STEPS_THINK_AHEAD-1);
 
 				s = s - res;
@@ -1331,5 +1331,5 @@ int main()
 		}
 	}
 	printf("x wins : %d, 0 wins : %d, draw : %d\n", countXWin, count0Win, draw);
-  printf("Total time that the AI spent to calculate moves: (%f ms)\n", total_move_time);
+  	printf("Total time that the AI spent to calculate moves: (%f ms)\n", total_move_time);
 }
