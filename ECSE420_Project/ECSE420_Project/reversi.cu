@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,8 +21,9 @@
 
 #define AI_PLAYER 0
 #define STEPS_THINK_AHEAD 3  // There are some bugs that the AI does not work when think more than 3 steps ahead
+#define AI_VS_RANDOM 1 // change to 0 to have user vs AI, change to 1 to have random player vs AI
 enum AI_LEVEL {Easy, Medium, Easy_CUDA, Medium_CUDA};
-const int ai = Medium_CUDA;
+const int ai = Medium;
 
 const char* row_names = "01234567";
 const char* col_names = "01234567";
@@ -1246,10 +1246,11 @@ void make_next_move()
 		}
 	}
 	else {
-    // Uncomment to have prompt to play against AI
-		//prompt_move_cpu( &row, &column );
-		
-    get_random_move_cpu(&row, &column);
+    if (AI_VS_RANDOM == 0) {
+			prompt_move_cpu( &row, &column );	
+		} else {
+			get_random_move_cpu(&row, &column);		
+		}
 		//printf("random: row: %d, column: %d\n", row, column);
 
 		// Uncomment to have easy plays against the other ai
@@ -1290,7 +1291,7 @@ int main()
 	int countXWin = 0;
 	int draw = 0;
 	int count0Win = 0;
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 100; i++) {
 		init_game();
 		while (!game_ended) {
 			if (!wrong_move) mark_playable_positions_cpu();
