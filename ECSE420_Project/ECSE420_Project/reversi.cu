@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <sys/time.h>
+#include <time.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
@@ -1131,7 +1131,6 @@ void make_next_move()
 {
 	int row = 0;
 	int column = 0;
-  struct timeval t1, t2;
 	if (AI_PLAYER == current_player) {
 		if (ai == Easy_CUDA || ai == Medium_CUDA) {
 			move* moves;
@@ -1171,15 +1170,16 @@ void make_next_move()
           moves[i*8 + j].j = j;
  				}
 			}
-      gettimeofday(&t1, NULL);
+			clock_t start, end;
+			start = clock();
       if (ai == Easy_CUDA) {
         get_easyAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
       } else {
         get_mediumAI_move << < 1, 64 >> > (devBoard2, devplayDir2, current_player, moves);
       }
 			cudaDeviceSynchronize();
-      gettimeofday(&t2, NULL);
-      total_move_time += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+			end = clock();
+			total_move_time += ((double)(end - start)) * 1000 / (CLOCKS_PER_SEC);
 
 			for (int i = 0; i < 64; i++)
 			{
@@ -1222,14 +1222,15 @@ void make_next_move()
  				}
 			}
       int max = -200;
-      gettimeofday(&t1, NULL);
+	  clock_t start, end;
+	  start = clock();
       if (ai == Easy) {
         max = get_easyAI_move_cpu(moves);
       } else {
         max = get_mediumAI_move_cpu(moves);
       }
-      gettimeofday(&t2, NULL);
-      total_move_time += (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+	  end = clock();
+      total_move_time += ((double)(end - start)) * 1000 / (CLOCKS_PER_SEC);
 			int sampling_count = 0;
 			for (int i = 0; i < 64; i++)
 			{
@@ -1290,7 +1291,7 @@ int main(int argc, char *argv[])
   if (argc != 3)
   {
       fprintf(stderr, "%s <AI_Player Level> <AI play with human or not>\n", argv[0]);
-      fprintf(stderr,"<AI_Player Level>: 0-Easy, 1-Easy_CUDA, 2-Medium, 3-Medium_CUDA\n");
+      fprintf(stderr,"<AI_Player Level>: 0-Easy, 1-Medium, 2-Easy_CUDA, 3-Medium_CUDA\n");
       fprintf(stderr,"<AI play with human or not>: 0-Human plays with AI, 1-Random player plays with AI.\n");
       return 1;
   }
