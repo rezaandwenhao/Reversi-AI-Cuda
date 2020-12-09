@@ -1,4 +1,5 @@
 # Reversi-AI-Cuda
+In this project, we implemented AI for the game - Reversi. The AI has two levels, easy and medium. For each level, we implemented the sequential and parallel algorithms. We use C as our programming language for the game play and sequential parts and CUDA for parallel parts. More details can be found in the Project Write-up. There is a concrete analysis on the performance of AI at the end of the write-up.
 
 ## Acknowledgement
 The game logic is based on https://github.com/rodolfoams/reversi-c. We rewrote the code and implemented the AI players and the random player on top of its terminal user inputting steps.
