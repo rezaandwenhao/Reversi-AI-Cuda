@@ -1,7 +1,7 @@
 # Reversi-AI-Cuda
 
 ## Acknowledgement
-The game logic is based on https://github.com/rodolfoams/reversi-c. We rewrote the code to implement the AI players and the random player on top of its terminal user inputting steps.
+The game logic is based on https://github.com/rodolfoams/reversi-c. We rewrote the code and implemented the AI players and the random player on top of its terminal user inputting steps.
 
 ## How to run the program
 One can directly open the reversiAI.ipynb in the Google Colab. Select runtime as GPU and run all cells. 
